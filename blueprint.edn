@@ -1,0 +1,12 @@
+{:itonami.blueprint/id "cloud-itonami-iso3166-jpn-statistics"
+ :itonami.blueprint/name "Independent Statistics-Japan Reporting-Obligation Compliance Service — Japan (Statistics Japan)"
+ :itonami.blueprint/iso3166 "JPN-STATISTICS"
+ :itonami.blueprint/iso3166-parent "JPN"
+ :itonami.blueprint/ooyake-id "gov.jpn.statistics"
+ :itonami.blueprint/domain :public-sector/statistics-reporting-compliance
+ :itonami.blueprint/license "AGPL-3.0-or-later"
+ :itonami.blueprint/social-impact [:official-statistics-clarity :reporting-obligation-access :public-spend-transparency]
+ :itonami.blueprint/governor :statistics-reporting-compliance-governor
+ :itonami.blueprint/robotics false
+ :itonami.blueprint/required-technologies [:identity :forms :dmn :bpmn :audit-ledger]
+ :itonami.blueprint/status :public-oss}
