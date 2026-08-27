@@ -1,0 +1,815 @@
+;; Regulatory source register for JPN-STATISTICS official-statistics
+;; reporting-obligation compliance.
+;;
+;; README.md says: every regulatory claim must cite the official Statistics
+;; Japan source. docs/operator-guide.md requires clear provenance for every
+;; requirement surfaced. docs/business-model.md makes a fabricated regulatory
+;; claim a HARD hold that must be corrected against a cited source first.
+;;
+;; Until this file existed there was no such list. Three documents required a
+;; citation against a set that did not exist, so no claim in this repository
+;; could be traced to anything, and nothing could tell a real citation from an
+;; invented one. This is that list.
+;;
+;; Shape is tx-data (a vector of entity maps), like every other EDN corpus in
+;; this workspace, so it loads with
+;;   (d/transact conn (edn/read-string (slurp "facts.edn")))
+;; :source/id is the join key. A law not in this table has NO spec-basis for
+;; this repository -- extend the table, never invent an id or a URL.
+;;
+;; VERIFIED BY `nbb scripts/verify-facts.cljs`, which re-fetches every entry
+;; from the live authority. Each entry carries a :source/verify tag naming
+;; WHICH check establishes it. The checks are not interchangeable, and the
+;; reasons are the main thing this file has to teach.
+;;
+;; ── THE AUTHORITY THIS REPOSITORY NAMES IS NOT THE ONE THAT RUNS THE
+;;    OBLIGATION MACHINERY
+;;
+;; organization.edn names 総務省統計局 and gives www.stat.go.jp. That is the
+;; survey-and-data side. The approval, notification and review machinery under
+;; 統計法 -- the part an operator with a reporting obligation actually meets --
+;; is run by 政策統括官（統計制度担当）, a different part of the same ministry,
+;; and it is published on www.soumu.go.jp/toukei_toukatsu/.
+;;
+;; So this register spans two hosts of one ministry plus the statistics portal,
+;; and they do not behave alike. Measured 2026-08-27:
+;;
+;;   www.soumu.go.jp    Shift_JIS   no charset in header   404 distinctive
+;;   www.stat.go.jp     Shift_JIS   no charset in header   404 titled like
+;;                                                         the front page
+;;   www.e-stat.go.jp   UTF-8       charset IS in header   404 distinctive
+;;
+;; A verifier written against any one of them is wrong about the other two.
+;; :host/charset is declared per HOST for exactly this reason.
+;;
+;; ── SHIFT_JIS WITH NO CHARSET IN THE HEADER, ON TWO OF THE THREE HOSTS
+;;
+;; Both ministry hosts answer Content-Type: text/html with NO charset
+;; parameter, and the bytes are Shift_JIS. The encoding is declared only in
+;; the HTML meta.
+;;
+;; A verifier that reads the body with res.text() gets UTF-8 decoding, which
+;; on these bytes produces deterministic mojibake. Measured, for the live
+;; 統計法について page whose real title is 総務省｜統計制度｜統計法について:
+;;
+;;   res.text()  ->  title 「�����ȁb���v���x�b���v�@�ɂ���」
+;;
+;; That is not a crash and not an empty string. It is a stable, plausible-
+;; looking value, and it breaks the register in BOTH directions:
+;;
+;;   - Every Japanese :page/must-contain needle fails to match, so every live
+;;     page in this register would be reported as a dead citation.
+;;   - An author who filled in :page/title by pasting what the verifier
+;;     printed would pin the mojibake, and the check would then pass forever
+;;     while asserting nothing about the page.
+;;
+;; So the body is decoded with :host/charset, and the run re-reads each page's
+;; own meta charset and REFUSES if it no longer agrees with the host
+;; declaration -- because the day these hosts migrate to UTF-8 is the day every
+;; stored title in this file becomes wrong at once, and that must surface as
+;; REFUSED (the register is out of date) and not as twelve page failures (the
+;; pages are gone).
+;;
+;; ── www.stat.go.jp SERVES ITS 404 UNDER THE FRONT PAGE'S OWN TITLE
+;;
+;; This is the sharpest host finding here and it has no counterpart on the
+;; other two hosts. Measured 2026-08-27:
+;;
+;;   https://www.stat.go.jp/index.html                 200  36,963 B
+;;   https://www.stat.go.jp/no-such-page-zzz999...     404   4,691 B
+;;
+;;   ...and BOTH carry <title>統計局ホームページ</title>.
+;;
+;; The bodies differ and the status differs, so a dead citation is still
+;; detectable -- on status. But the TITLE conjunct is vacuous for any entry
+;; that cites a page titled 統計局ホームページ: the check would pass on a URL
+;; that does not exist. That is the same defect as a needle that sits on the
+;; 404 chrome, and it is treated the same way -- as a finding about the
+;; register, not about the page.
+;;
+;; This is why the front page is NOT in this register. /data/index.html and
+;; /info/guide/index.html are, because their titles carry a suffix
+;; (統計局ホームページ/統計データ) that the 404 body does not have. The run
+;; FAILS any page entry whose declared title equals its host's missing-page
+;; title, with reason :title-on-missing-page, before the page is fetched.
+;;
+;; The collision itself is re-measured every run: the preflight requires the
+;; 404 title and the known-real-path title to still be equal. If Statistics
+;; Japan ever gives its 404 page a title of its own, this rule has expired and
+;; that is the check which notices.
+;;
+;; ── THE MISSING-PAGE BODY CARRIES THIS REPOSITORY'S OWN HQ ADDRESS
+;;
+;; Measured present on www.stat.go.jp's 404 body, for a URL that does not
+;; exist:
+;;
+;;   統計局   総務省   若松町   162-8668   03-5273-2020
+;;
+;; organization.edn asserts Wakamatsuchō as the HQ line. So the obvious way to
+;; confirm the address -- fetch a stat.go.jp page and look for 若松町, or for
+;; the postcode -- passes on a page that is not there. The 404 body is only
+;; 4,691 bytes and still finds room for the full footer.
+;;
+;; www.soumu.go.jp's 404 body is ~39 KB of site chrome and carries 届出,
+;; 統計情報, 個人情報 and 100-8926. 届出 is one of the entry routes under
+;; 統計法, so the obvious sentinel for a notification-procedure page is on the
+;; missing-page body of the host that publishes it.
+;;
+;; www.e-stat.go.jp's 404 body carries e-Stat and 政府統計の総合窓口 -- the
+;; portal's own name, and the exact title of its front page. The obvious
+;; sentinel for 「this is e-Stat」 is on the page that says e-Stat could not
+;; find what you asked for.
+;;
+;; The verifier does not leave that to whoever writes the next entry. It
+;; fetches each host's missing-page body once and FAILS any :page/must-contain
+;; string found on it, with reason :chrome-needle, before the cited page is
+;; fetched at all.
+;;
+;; ── TWO ORDINANCES SHARE ONE TITLE AND ONE OF THEM IS REPEALED
+;;
+;; 経済センサス基礎調査規則 names two different instruments:
+;;
+;;   420M60000008125  平成二十年総務省令第百二十五号   REPEALED 2019-04-01
+;;   431M60000008046  平成三十一年総務省令第四十六号   in force
+;;
+;; A citer who writes down the title 経済センサス基礎調査規則 and gets a title
+;; match has established nothing about which ordinance they cited. Title
+;; checking is not merely weak here -- it is provably unable to separate a live
+;; designated-survey ordinance from one repealed seven years ago, for a survey
+;; that businesses are actually enumerated in.
+;;
+;; So every statute entry declares :egov/law-num as well as :egov/law-title,
+;; and the two of them have separate negative controls in the self-tests: the
+;; repealed ordinance declared in force with its title AND number left correct
+;; (only :egov/repeal-status can catch it), and the live ordinance declared
+;; with the repealed one's law number (only :egov/law-num can catch it, since
+;; title, repeal status and revision status all match).
+;;
+;; 工業統計調査規則 and 商業統計調査規則 are carried for the same reason: both
+;; were real designated-survey ordinances, both were repealed into the economic
+;; census, and both still answer the API with the title and law number a citer
+;; would have written down.
+;;
+;; ── AND A LIVE ACT CAN FAIL A SECOND WAY THE REPEAL FIELD DOES NOT SEE
+;;
+;; 421AC0000000066, 公文書等の管理に関する法律 -- which governs how the records
+;; an operator submits are kept -- has repeal_status None but
+;; current_revision_status PreviousEnforced. The displayed revision is not the
+;; enforced one. Both fields are declared per entry and both are checked.
+;;
+;; NOT remain_in_force: that field reads like the answer and is not. Measured
+;; 2026-08-27 on 統計法 itself, live and in force, remain_in_force is false --
+;; the same value the repealed 経済センサス基礎調査規則 carries. Keying on it
+;; would mark every live statute in this register dead. It also lives under
+;; revision_info, not law_info, so reading it from the obvious place returns
+;; nil, which is a third wrong answer that looks like a missing field.
+;;
+;; ── laws.e-gov.go.jp CANNOT BE CHECKED AS A PAGE AT ALL
+;;
+;; Measured 2026-08-27 with this repository's own core statute:
+;; /law/419AC0000000053 (統計法, real) and /law/999ZZ9999999999 (invented) both
+;; answer HTTP 200, at the requested URL with no redirect, with the identical
+;; title e-Gov 法令検索 over a small client-rendered shell, at the identical
+;; 800 bytes. Status, final URL, title and length all agree between a real
+;; citation and a fabricated one. The length is deliberately NOT pinned: the
+;; MIC register measured this same shell at 696 bytes, so it moves on its own
+;; and a check keyed to it would report the host wrong for a reason that means
+;; nothing.
+;;
+;; So the host is declared :indistinguishable, page checks on it are REFUSED,
+;; and every statute is resolved through the law API instead. The
+;; indistinguishability is re-measured every run; if the host ever starts
+;; telling the two apart, this rule has expired and that is what notices.
+;;
+;; ── LAW IDS WERE NOT DERIVABLE AND WERE NOT GUESSED
+;;
+;; Every :egov/law-id below came back from a title query against the law API,
+;; not from a pattern. The guesses that were tried and failed are worth
+;; recording: 322AC0000000018 (the pre-2007 統計法) and 327AC0000000148
+;; (統計報告調整法) both return total_count 0 -- they are not in the API at
+;; all, so a repealed-statute control could not be built from the obvious
+;; candidates and had to be found by enumerating the 43 instruments whose title
+;; contains 統計.
+;;
+;; ── PAGE PATHS WERE NOT DERIVABLE EITHER
+;;
+;; Also worth recording, because the paths look systematic and are not.
+;; Measured 404 on the first attempt: /index/seido/index.html,
+;; /index/seido/houki.htm, /index/seido/houki.html, /index/seido/1-1.html on
+;; www.stat.go.jp, and /toukei_toukatsu/index/seido/index.htm,
+;; /toukei_toukatsu/index/seido/houkoku.htm, /toukei_toukatsu/index/seido/1-1k.htm
+;; and /toukei_toukatsu/index/index.html on www.soumu.go.jp. Every URL below
+;; was read off a link on a page that was itself fetched.
+;;
+;; ── DATES HERE ARE UTC
+;;
+;; :source/retrieved-at is the UTC date of the fetch. This workstation runs
+;; JST, so a date copied from `date` without -u is nine hours ahead and would
+;; make a retrieval look newer than it is.
+;;
+;; ── WHAT :source/covers CLAIMS, AND WHERE IT STOPS
+;;
+;; An entry establishes that the instrument or page EXISTS, is identified as
+;; written, and is in the force status declared. It does not establish what any
+;; provision says. register.coverage lists what is deliberately not here.
+
+[
+ ;; ── What this register does not cover ──────────────────────────────────────
+ {:source/id "register.coverage"
+  :source/kind :coverage
+  :coverage/entries 30
+  :coverage/by-verify {:e-gov-law-id 18 :page-text 12}
+  :coverage/measured-at "2026-08-27"
+  :coverage/excludes
+  #{;; Article text. Nothing below asserts what any provision SAYS -- only
+    ;; that the instrument exists, is identified as written, and is in the
+    ;; force status declared. A requirement checklist built on this register
+    ;; still has to read the provision.
+    :article-text
+    ;; The 承認 / 届出 split itself. Whether a survey an operator is caught by
+    ;; is a 基幹統計調査, a 一般統計調査 or a 届出統計調査 is the first question
+    ;; this repository is asked, and it is decided by 統計法 together with
+    ;; 統計法施行令's designations. Both are cited; the classification of any
+    ;; particular survey is not established by citing them.
+    :survey-classification
+    ;; Whether a named operator is a designated respondent for a given survey,
+    ;; and on what cycle. The survey ordinances are cited; no operator's
+    ;; enumeration status is.
+    :respondent-designation
+    ;; The 調査票 forms themselves, their fields and their filing deadlines.
+    ;; Those move on each survey's own timetable and none are carried here.
+    :survey-forms-and-deadlines
+    ;; Eligibility to receive 調査票情報 under 統計法. The microdata portal and
+    ;; the ministry's activation page are cited; who may actually be granted
+    ;; access, and on what terms, is not.
+    :microdata-eligibility
+    ;; Penalties. 統計法 carries criminal provisions for false reporting and for
+    ;; disclosure of survey information; no amount or exposure is stated here.
+    :penalties
+    ;; Subnational instruments. Prefectures and municipalities run statistical
+    ;; work under their own rules, and none of those are here.
+    :subnational-instruments}}
+
+ ;; ── Host behaviour the page checks rest on ─────────────────────────────────
+ ;; Re-measured every run. Every :page-* entry below is only as good as these.
+
+ {:source/id "host.soumu"
+  :source/kind :host-behaviour
+  :host/name "www.soumu.go.jp"
+  :host/missing-path :answers-404
+  :host/missing-status 404
+  :host/missing-title "総務省｜ご案内ページ　－ご利用のページが見つかりません－"
+  :host/known-real-path "/toukei_toukatsu/index.html"
+  :host/charset "shift_jis"
+  :host/declares-charset-in-header? false
+  :source/retrieved-at "2026-08-27"
+  :source/note "The ministry host that publishes the 統計法 machinery, under
+                /toukei_toukatsu/. Answers a clean 404 with a title of its own,
+                so a dead citation here is detectable on status AND on title.
+                The catch is twofold: Content-Type is bare text/html over
+                Shift_JIS bytes, so the body must be decoded with
+                :host/charset; and the 404 body is about 39 KB of full site
+                chrome carrying 届出, 統計情報, 個人情報 and 100-8926, so the
+                obvious sentinels for a notification-procedure page are on the
+                missing page."}
+
+ {:source/id "host.stat"
+  :source/kind :host-behaviour
+  :host/name "www.stat.go.jp"
+  :host/missing-path :answers-404
+  :host/missing-status 404
+  :host/missing-title "統計局ホームページ"
+  :host/missing-title-equals-real-page? true
+  :host/known-real-path "/index.html"
+  :host/charset "shift_jis"
+  :host/declares-charset-in-header? false
+  :source/retrieved-at "2026-08-27"
+  :source/note "The authority organization.edn actually names, and the one host
+                here whose 404 page is titled like a real page. Measured: the
+                404 body (4,691 B) and the live front page (36,963 B) both
+                carry <title>統計局ホームページ</title>. Status still separates
+                them, but the title conjunct is vacuous for any entry citing a
+                page with that title, so the front page is deliberately absent
+                from this register and the run FAILS any entry whose declared
+                title equals this one. The equality is re-measured every run
+                against :host/known-real-path; if the 404 ever gets a title of
+                its own, the declaration has expired. The 404 body also carries
+                若松町, 162-8668 and 03-5273-2020 -- which is what
+                organization.edn asserts as the HQ -- so confirming the address
+                against this host passes on a URL that does not exist."}
+
+ {:source/id "host.e-stat"
+  :source/kind :host-behaviour
+  :host/name "www.e-stat.go.jp"
+  :host/missing-path :answers-404
+  :host/missing-status 404
+  :host/missing-title "ページが見つかりません | 政府統計の総合窓口"
+  :host/known-real-path "/microdata/"
+  :host/charset "utf-8"
+  :host/declares-charset-in-header? true
+  :source/retrieved-at "2026-08-27"
+  :source/note "The statistics portal, and the one host of the three that
+                declares its charset in the Content-Type header and serves
+                UTF-8. Recorded because it is the counterexample: a verifier
+                that inferred a charset rule from either ministry host would be
+                wrong here, and one that inferred it from here would produce
+                mojibake on both of them. Where the header does carry a charset
+                the preflight requires it to still agree with :host/charset.
+                The 404 body (8,111 B) carries e-Stat and 政府統計の総合窓口,
+                the portal's own name and its front page's exact title, so the
+                obvious sentinel for the portal is on the missing page."}
+
+ {:source/id "host.laws-e-gov"
+  :source/kind :host-behaviour
+  :host/name "laws.e-gov.go.jp"
+  :host/missing-path :indistinguishable
+  :host/charset "utf-8"
+  :host/known-real-path "/law/419AC0000000053"
+  :source/retrieved-at "2026-08-27"
+  :source/note "A real law path and an invented one agree on status (200),
+                final URL (no redirect), title (e-Gov 法令検索) and length (800
+                bytes each). The length is not pinned -- the same shell was
+                measured at 696 bytes by a sibling register, so it moves on its
+                own. There is nothing left for a page check to compare, so page
+                checks on this host are REFUSED and statutes are resolved
+                through the API. Re-measured every run against this
+                repository's own core statute; if the host ever starts
+                discriminating, that is the check which notices."}
+
+ ;; ── The Act this repository is built on ────────────────────────────────────
+
+ {:source/id "law.statistics-act"
+  :source/kind :statute
+  :source/title "統計法"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/419AC0000000053"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "419AC0000000053"
+  :egov/law-title "統計法"
+  :egov/law-num "平成十九年法律第五十三号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The Act the whole repository rests on: designation of 基幹統計,
+                  approval of 基幹統計調査 and 一般統計調査, notification of
+                  届出統計調査, the reporting obligation itself, and the
+                  protection and secondary use of 調査票情報. Its existence and
+                  force status are established here; no provision is quoted."}
+
+ {:source/id "law.statistics-act-order"
+  :source/kind :statute
+  :source/title "統計法施行令"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/420CO0000000334"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "420CO0000000334"
+  :egov/law-title "統計法施行令"
+  :egov/law-num "平成二十年政令第三百三十四号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The Cabinet Order under the Act. Carries the designations and
+                  delegations that decide which regime a survey falls under."}
+
+ {:source/id "law.statistics-act-ordinance"
+  :source/kind :statute
+  :source/title "統計法施行規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/420M60000008145"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "420M60000008145"
+  :egov/law-title "統計法施行規則"
+  :egov/law-num "平成二十年総務省令第百四十五号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The ministerial ordinance under the Act. Carries the
+                  procedural detail of approval and notification filings."}
+
+ {:source/id "law.statistics-commission-order"
+  :source/kind :statute
+  :source/title "統計委員会令"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/419CO0000000300"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "419CO0000000300"
+  :egov/law-title "統計委員会令"
+  :egov/law-num "平成十九年政令第三百号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "Constitutes the 統計委員会, which is consulted on the
+                  designations and approvals an operator is downstream of."}
+
+ {:source/id "law.statistics-centre-act"
+  :source/kind :statute
+  :source/title "独立行政法人統計センター法"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/411AC0000000219"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "411AC0000000219"
+  :egov/law-title "独立行政法人統計センター法"
+  :egov/law-num "平成十一年法律第二百十九号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "Constitutes the body that actually processes the returns an
+                  operator files. Relevant because a submission reaches it, not
+                  only the Bureau named on the form."}
+
+ ;; ── The designated surveys an operator is most likely to be caught by ──────
+
+ {:source/id "law.population-census-order"
+  :source/kind :statute
+  :source/title "国勢調査令"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/355CO0000000098"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "355CO0000000098"
+  :egov/law-title "国勢調査令"
+  :egov/law-num "昭和五十五年政令第九十八号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The flagship 基幹統計調査. Carried as the reference case for
+                  what a designated survey looks like in instrument form."}
+
+ {:source/id "law.population-census-ordinance"
+  :source/kind :statute
+  :source/title "国勢調査施行規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/355M50000002021"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "355M50000002021"
+  :egov/law-title "国勢調査施行規則"
+  :egov/law-num "昭和五十五年総理府令第二十一号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The ordinance under 国勢調査令. Note the issuing body is
+                  総理府, not 総務省 -- pre-reorganisation instruments keep their
+                  original law number, which is why the number cannot be
+                  derived from the administering ministry."}
+
+ {:source/id "law.labour-force-survey-ordinance"
+  :source/kind :statute
+  :source/title "労働力調査規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/358M50000002023"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "358M50000002023"
+  :egov/law-title "労働力調査規則"
+  :egov/law-num "昭和五十八年総理府令第二十三号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "A Statistics Bureau 基幹統計調査 run monthly."}
+
+ {:source/id "law.household-survey-ordinance"
+  :source/kind :statute
+  :source/title "家計調査規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/350M50000002071"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "350M50000002071"
+  :egov/law-title "家計調査規則"
+  :egov/law-num "昭和五十年総理府令第七十一号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "A Statistics Bureau 基幹統計調査 run monthly."}
+
+ {:source/id "law.employment-structure-survey-ordinance"
+  :source/kind :statute
+  :source/title "就業構造基本調査規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/357M50000002025"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "357M50000002025"
+  :egov/law-title "就業構造基本調査規則"
+  :egov/law-num "昭和五十七年総理府令第二十五号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "A Statistics Bureau 基幹統計調査 run on a five-year cycle."}
+
+ {:source/id "law.economic-census-basic-ordinance"
+  :source/kind :statute
+  :source/title "経済センサス基礎調査規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/431M60000008046"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "431M60000008046"
+  :egov/law-title "経済センサス基礎調査規則"
+  :egov/law-num "平成三十一年総務省令第四十六号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The LIVE economic census basic survey ordinance, and the most
+                  business-facing designated survey in this register. Shares its
+                  title exactly with law.repealed-economic-census-basic-ordinance
+                  below, which is why :egov/law-num is checked separately and has
+                  its own negative control."}
+
+ {:source/id "law.economic-census-activity-ordinance"
+  :source/kind :statute
+  :source/title "経済センサス活動調査規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/423M60000408001"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "423M60000408001"
+  :egov/law-title "経済センサス活動調査規則"
+  :egov/law-num "平成二十三年総務省・経済産業省令第一号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The activity-side economic census, issued jointly by two
+                  ministries -- the law number records both, which is a second
+                  reason the number is not derivable from the administering
+                  body."}
+
+ {:source/id "law.service-industry-survey-ordinance"
+  :source/kind :statute
+  :source/title "サービス産業動態統計調査規則"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/506M60000008056"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "506M60000008056"
+  :egov/law-title "サービス産業動態統計調査規則"
+  :egov/law-num "令和六年総務省令第五十六号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "The newest instrument in this register (令和六年). Carried
+                  because a register built only from long-standing ordinances
+                  would not notice that new designated surveys keep arriving."}
+
+ ;; ── Adjacent obligations a filing operator meets ───────────────────────────
+
+ {:source/id "law.personal-information-protection-act"
+  :source/kind :statute
+  :source/title "個人情報の保護に関する法律"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/415AC0000000057"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "415AC0000000057"
+  :egov/law-title "個人情報の保護に関する法律"
+  :egov/law-num "平成十五年法律第五十七号"
+  :egov/repeal-status "None"
+  :egov/revision-status "CurrentEnforced"
+  :source/covers "Interacts with 統計法 wherever the data an operator submits or
+                  receives is personal data. Which Act governs a given holding
+                  is not decided here."}
+
+ {:source/id "law.public-records-management-act"
+  :source/kind :statute
+  :source/title "公文書等の管理に関する法律"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/421AC0000000066"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "421AC0000000066"
+  :egov/law-title "公文書等の管理に関する法律"
+  :egov/law-num "平成二十一年法律第六十六号"
+  :egov/repeal-status "None"
+  :egov/revision-status "PreviousEnforced"
+  :source/covers "Governs how the records an operator files are kept on the
+                  government side. Carried ALSO as the revision-status negative
+                  control: repeal_status is None -- it is a live Act -- but
+                  current_revision_status is PreviousEnforced, so the displayed
+                  revision is not the enforced one. An entry checked on title,
+                  number and repeal alone would report it as current."}
+
+ ;; ── Repealed instruments, carried as real negative controls ────────────────
+ ;; Each answers the API with the title and law number a citer would have
+ ;; written down. None is fabricated.
+
+ {:source/id "law.repealed-economic-census-basic-ordinance"
+  :source/kind :statute
+  :source/title "経済センサス基礎調査規則 (平成二十年総務省令第百二十五号、廃止)"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/420M60000008125"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "420M60000008125"
+  :egov/law-title "経済センサス基礎調査規則"
+  :egov/law-num "平成二十年総務省令第百二十五号"
+  :egov/repeal-status "Repeal"
+  :egov/revision-status "Repeal"
+  :egov/repealed-on "2019-04-01"
+  :source/covers "The sharpest control in this register. Repealed 2019-04-01 and
+                  replaced by 431M60000008046, which carries the IDENTICAL
+                  title. Title checking cannot separate them at all; only the
+                  law number and the repeal status can. Used as the negative
+                  control for both."}
+
+ {:source/id "law.repealed-industrial-statistics-ordinance"
+  :source/kind :statute
+  :source/title "工業統計調査規則 (廃止)"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/326M50000400081"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "326M50000400081"
+  :egov/law-title "工業統計調査規則"
+  :egov/law-num "昭和二十六年通商産業省令第八十一号"
+  :egov/repeal-status "Repeal"
+  :egov/revision-status "Repeal"
+  :egov/repealed-on "2022-04-01"
+  :source/covers "A designated manufacturing survey that ran for seventy years
+                  and was folded into the economic census in 2022. Still
+                  resolves; a checklist citing it would look sourced."}
+
+ {:source/id "law.repealed-commercial-statistics-ordinance"
+  :source/kind :statute
+  :source/title "商業統計調査規則 (廃止)"
+  :source/publisher "e-Gov 法令検索 (Digital Agency)"
+  :source/url "https://laws.e-gov.go.jp/law/327M50000400060"
+  :source/verify :e-gov-law-id
+  :source/retrieved-at "2026-08-27"
+  :egov/law-id "327M50000400060"
+  :egov/law-title "商業統計調査規則"
+  :egov/law-num "昭和二十七年通商産業省令第六十号"
+  :egov/repeal-status "Repeal"
+  :egov/revision-status "Repeal"
+  :egov/repealed-on "2019-06-12"
+  :source/covers "The commercial counterpart, repealed 2019-06-12. Carried
+                  because 工業統計調査規則 and 商業統計調査規則 are exactly the
+                  two an operator or an advisor would still name from memory."}
+
+ ;; ── Ministry pages: the 統計法 machinery on www.soumu.go.jp ─────────────────
+
+ {:source/id "page.statistics-system-index"
+  :source/kind :guidance
+  :source/title "総務省 統計制度"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/index.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜国民生活と安心・安全｜統計制度"
+  :page/must-contain ["統計制度" "統計法" "統計基準"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The entry point to the 統計法 machinery. Note the title says
+                  国民生活と安心・安全, not 統計制度 -- the breadcrumb and the
+                  page name disagree, so the title had to be read off the page
+                  rather than composed from the link text."}
+
+ {:source/id "page.about-statistics-act"
+  :source/kind :guidance
+  :source/title "統計法について"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/seido/1-1n.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜統計制度｜統計法について"
+  :page/must-contain ["統計法" "公的統計" "基幹統計"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The ministry's own overview of the Act. Cited as the guidance
+                  surface; the Act itself is law.statistics-act."}
+
+ {:source/id "page.statistics-system-planning"
+  :source/kind :guidance
+  :source/title "統計制度の企画・立案等"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/seido/index-k.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜統計制度｜統計制度の企画・立案等"
+  :page/must-contain ["統計制度" "統計法" "公的統計"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "Where the designation and planning work sits organisationally.
+                  Relevant because it is not the Bureau this repository names."}
+
+ {:source/id "page.survey-review"
+  :source/kind :guidance
+  :source/title "統計調査の審査等"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/seido/8.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜統計制度｜統計調査の審査等"
+  :page/must-contain ["基幹統計調査" "一般統計調査" "承認"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The approval and review route. The closest thing in this
+                  register to the procedural page an operator is sent to. Does
+                  NOT establish which regime a given survey falls under -- see
+                  :survey-classification in register.coverage."}
+
+ {:source/id "page.microdata-activation"
+  :source/kind :guidance
+  :source/title "公的統計調査の調査票情報等の学術研究等への活用"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/seido/2jiriyou.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜統計制度｜「公的統計調査の調査票情報等の学術研究等への活用」について"
+  :page/must-contain ["調査票情報" "統計法" "学術研究"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "Secondary use of survey information. The ministry-side
+                  counterpart to page.microdata-portal on e-Stat."}
+
+ {:source/id "page.statistical-standards"
+  :source/kind :guidance
+  :source/title "統計基準等の設定"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/seido/kijun.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜国民生活と安心・安全｜統計基準等"
+  :page/must-contain ["統計基準" "日本標準産業分類"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The statistical standards a return has to be coded against."}
+
+ {:source/id "page.jsic"
+  :source/kind :guidance
+  :source/title "日本標準産業分類（令和5年7月告示）"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/seido/sangyo/R05index.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜統計基準等｜日本標準産業分類（令和5年7月告示）"
+  :page/must-contain ["日本標準産業分類" "統計基準"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "JSIC, the classification an operator's own activity is coded
+                  into on a return. Directly relevant to the cloud-itonami
+                  ISIC-coded actor family. The revision year is IN the title, so
+                  the next 告示 will surface as a title drift rather than
+                  silently changing what this citation means."}
+
+ {:source/id "page.basic-plan"
+  :source/kind :guidance
+  :source/title "公的統計の整備に関する基本的な計画"
+  :source/publisher "総務省 政策統括官（統計制度担当）"
+  :source/url "https://www.soumu.go.jp/toukei_toukatsu/index/seido/12.htm"
+  :source/verify :page-text
+  :page/host "www.soumu.go.jp"
+  :page/title "総務省｜統計制度｜「公的統計の整備に関する基本的な計画」"
+  :page/must-contain ["公的統計" "基本的な計画"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The statutory basic plan. Useful for anticipating which
+                  surveys are being added or retired, which is what the three
+                  repealed ordinances above are the historical evidence of."}
+
+ ;; ── Statistics Japan's own pages, on www.stat.go.jp ────────────────────────
+ ;; The front page is deliberately absent: its title is also the 404 title.
+
+ {:source/id "page.statistics-data"
+  :source/kind :guidance
+  :source/title "統計局ホームページ 統計データ"
+  :source/publisher "総務省統計局"
+  :source/url "https://www.stat.go.jp/data/index.html"
+  :source/verify :page-text
+  :page/host "www.stat.go.jp"
+  :page/title "統計局ホームページ/統計データ"
+  :page/must-contain ["統計データ" "分野別一覧" "公表スケジュール"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The Bureau's data index. Cited rather than the front page
+                  because the suffix after the slash is what distinguishes this
+                  title from the 404 body's title -- see host.stat."}
+
+ {:source/id "page.bureau-activities"
+  :source/kind :guidance
+  :source/title "統計局ホームページ 統計局の取組"
+  :source/publisher "総務省統計局"
+  :source/url "https://www.stat.go.jp/info/guide/index.html"
+  :source/verify :page-text
+  :page/host "www.stat.go.jp"
+  :page/title "統計局ホームページ/統計局の取組"
+  :page/must-contain ["統計局の取組" "統計研究研修"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "What the Bureau says it does, which is the surface an operator
+                  reads to work out who they are dealing with. Same title-suffix
+                  reasoning as page.statistics-data."}
+
+ ;; ── The portal, on www.e-stat.go.jp ────────────────────────────────────────
+
+ {:source/id "page.e-stat-portal"
+  :source/kind :guidance
+  :source/title "政府統計の総合窓口 (e-Stat)"
+  :source/publisher "総務省統計局 / 独立行政法人統計センター"
+  :source/url "https://www.e-stat.go.jp/"
+  :source/verify :page-text
+  :page/host "www.e-stat.go.jp"
+  :page/title "政府統計の総合窓口"
+  :page/must-contain ["分野から探す" "組織から探す" "統計データを探す"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The portal where published results land. The needles are the
+                  three navigation affordances, NOT the portal's name -- e-Stat
+                  and 政府統計の総合窓口 are both on this host's 404 body, so
+                  either would pass on a page that is not there."}
+
+ {:source/id "page.microdata-portal"
+  :source/kind :guidance
+  :source/title "ミクロデータ利用ポータルサイト (miripo)"
+  :source/publisher "総務省統計局 / 独立行政法人統計センター"
+  :source/url "https://www.e-stat.go.jp/microdata/"
+  :source/verify :page-text
+  :page/host "www.e-stat.go.jp"
+  :page/title "ミクロデータ利用ポータルサイト"
+  :page/must-contain ["ミクロデータ" "オンサイト" "調査票情報"]
+  :source/retrieved-at "2026-08-27"
+  :source/covers "The operational route for 調査票情報 access: on-site use,
+                  remote access and media provision. Does NOT establish who is
+                  eligible -- see :microdata-eligibility in register.coverage."}
+]
