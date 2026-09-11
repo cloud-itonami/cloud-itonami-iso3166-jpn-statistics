@@ -63,7 +63,7 @@ spec-basis here** — extend the table, never invent an id or a URL.
 Re-check it against the live authorities:
 
 ```bash
-nbb scripts/verify-facts.cljs
+nbb scripts/verify-facts.cljk
 ```
 
 Three exit codes, and the third is the point:
