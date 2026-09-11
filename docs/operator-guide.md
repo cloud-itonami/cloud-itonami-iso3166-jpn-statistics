@@ -21,7 +21,7 @@
 - clear provenance (official Statistics Japan source citation) for every
   requirement surfaced — the citable set is [`facts.edn`](../facts.edn),
   re-checkable against the live authorities with
-  `nbb scripts/verify-facts.cljk`. A requirement whose basis is not in that
+  `kbb --backend sci scripts/verify-facts.cljk`. A requirement whose basis is not in that
   register has no provenance. Note in particular that the register does
   **not** establish whether a given survey is a 基幹統計調査, a 一般統計調査
   or a 届出統計調査, nor whether a named operator is a designated respondent
